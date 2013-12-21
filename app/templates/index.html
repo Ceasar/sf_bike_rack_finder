@@ -7,6 +7,7 @@
     #map-canvas { height: 100% }
     h1 {position: fixed; z-index: 1;}
 </style>
+<script src="//ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script>
 <script type="text/javascript"
     src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBcdlfecz9zBAbdTQjrsG4_vOS5lTEtvDw&sensor=true">
 </script>
@@ -33,7 +34,7 @@
         var request = {
             origin: start,
             destination: end,
-            travelMode: google.maps.TravelMode.DRIVING
+            travelMode: google.maps.TravelMode.BICYCLING
         };
         directionsService.route(request, function(result, status) {
             if (status == google.maps.DirectionsStatus.OK) {
@@ -45,10 +46,17 @@
     google.maps.event.addDomListener(window, 'load', initialize);
 
     navigator.geolocation.getCurrentPosition(function(position){
-        var lat = position.coords.latitude;
-        var lon = position.coords.longitude;
-        var myLocation = new google.maps.LatLng(lat, lon);
-        calcRoute(SF, myLocation);
+            var lat = position.coords.latitude;
+            var lon = position.coords.longitude;
+            var myLocation = new google.maps.LatLng(lat, lon);
+            $.getJSON("/closest", {
+                latitude: lat,
+                longitude: lon,
+                }, function(data) {
+                var closestSpot = new google.maps.LatLng(data.latitude, data.longitude);
+                calcRoute(myLocation, closestSpot);
+                }
+            );
         },
         function(error){}
     );
