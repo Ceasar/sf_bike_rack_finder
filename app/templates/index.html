@@ -28,6 +28,14 @@
         };
         map = new google.maps.Map(document.getElementById("map-canvas"), mapOptions);
         directionsDisplay.setMap(map);
+        showClosest(SF);
+        // todo: use user's current position in deploy
+        // navigator.geolocation.getCurrentPosition(function(position){
+        //  var lat = position.coords.latitude;
+        //  var lon = position.coords.longitude;
+        //  var myLocation = new google.maps.LatLng(lat, lon);
+        /// showClosest(myLocation);
+        //});
     };
 
     function calcRoute(start, end) {
@@ -43,22 +51,34 @@
         });
     }
 
-    google.maps.event.addDomListener(window, 'load', initialize);
-
-    navigator.geolocation.getCurrentPosition(function(position){
-            var lat = position.coords.latitude;
-            var lon = position.coords.longitude;
-            var myLocation = new google.maps.LatLng(lat, lon);
-            $.getJSON("/closest", {
-                latitude: lat,
-                longitude: lon,
-                }, function(data) {
-                var closestSpot = new google.maps.LatLng(data.latitude, data.longitude);
-                calcRoute(myLocation, closestSpot);
-                }
+    function showClosest(latLng) {
+        $.getJSON("/closest", {
+            latitude: latLng.lat(),
+            longitude: latLng.lng(),
+            }, function(parkingSpots) {
+            var closestSpot = new google.maps.LatLng(
+                parkingSpots[0].latitude,
+                parkingSpots[0].longitude
             );
-        },
-        function(error){}
-    );
+            var markers = [];
+            parkingSpots.forEach(function(spot) {
+                var position = new google.maps.LatLng(
+                    spot.latitude,
+                    spot.longitude
+                );
+                var marker = new google.maps.Marker({
+                    position: position,
+                    map: map,
+                    title: spot['location'],
+                });
+                markers.push(marker);
+            });
+            markers[0].setAnimation(google.maps.Animation.BOUNCE);
+            calcRoute(latLng, closestSpot);
+            }
+        );
+    }
+
+    google.maps.event.addDomListener(window, 'load', initialize);
 </script>
 {% endblock %}
