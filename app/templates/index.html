@@ -2,7 +2,7 @@
 
 {% block body %}
 <h1>San Francisco Bicycle Parking</h1>
-{% for parking_spot in rows %}
+{% for parking_spot in parking_spots %}
     {% include "parking_spot.html" %}
 {% endfor %}
 {% endblock %}
