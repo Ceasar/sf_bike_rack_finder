@@ -33,6 +33,13 @@ var main = function(origin) {
                 WALKING: spotsByAddress[closestAddressByMode[WALKING]],
                 BICYCLING: spotsByAddress[closestAddressByMode[BICYCLING]],
             }
+            google.maps.event.addListener(map, 'tilesloaded', _.once(function() {
+                var targets = [closestSpotByMode[WALKING], closestSpotByMode[BICYCLING]];
+                var bounds = _.foldl(targets, function(bounds, spot) {
+                    return bounds.extend(spotToLatLng(spot));
+                },map.getBounds());
+                map.fitBounds(bounds);
+            }));
             _.each(parkingSpots, function(spot) {
                 var marker = new Marker({
                     position: spotToLatLng(spot),
