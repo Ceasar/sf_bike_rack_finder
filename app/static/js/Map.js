@@ -13,16 +13,6 @@ define(function () {
         this.parkingSpots = [];
         this.routes = [];
         this.startLocation = null;
-
-        /*
-         * Resize the bounds of `map` to include each of `targets`.
-         */
-        var getBounds = function(targets) {
-            var bounds = _.foldl(targets, function(bounds, spot) {
-                return bounds.extend(spot.latLng);
-            }, new google.maps.LatLngBounds());
-            return bounds;
-        }
     }
 
     Map.prototype.addRoute = function(route) {
@@ -46,15 +36,18 @@ define(function () {
     Map.prototype.setStartLocation = function(center) {
         if (!center.equals(this.getStartLocation())) {
             this.startLocation = center;
-            this.draw();
+            this.redraw();
         }
+    }
+
+    Map.prototype.erase = function() {
+        _.each(this.parkingSpots, function(spot) {
+            spot.clear();
+        });
     }
 
     Map.prototype.draw = function() {
         var that = this;
-        _.each(this.parkingSpots, function(spot) {
-            spot.clear();
-        });
         getNearbyParkingSpots(this.startLocation, function(spots) {
             that.parkingSpots = spots;
             _.each(that.parkingSpots, function(spot) {
@@ -63,7 +56,19 @@ define(function () {
             _.each(that.routes, function(route) {
                 route.calculateDirections(that.startLocation, that.parkingSpots, function() {});
             });
+            var bounds = getBounds(spots);
+            that.map.panToBounds(bounds);
+            if (_.some(spots, function(spot) {
+                return !that.map.getBounds().contains(spot.latLng);
+            })) {
+                that.map.fitBounds(bounds);
+            }
         });
+    }
+
+    Map.prototype.redraw = function() {
+        this.erase();
+        this.draw();
     }
 
     Map.prototype.notify = function(event_name, data) {
@@ -111,6 +116,16 @@ define(function () {
         this.clear = function() {
             marker.setMap(null);
         }
+    }
+
+    /*
+     * Resize the bounds of `map` to include each of `targets`.
+     */
+    var getBounds = function(targets) {
+        var bounds = _.foldl(targets, function(bounds, spot) {
+            return bounds.extend(spot.latLng);
+        }, new google.maps.LatLngBounds());
+        return bounds;
     }
 
     return {
