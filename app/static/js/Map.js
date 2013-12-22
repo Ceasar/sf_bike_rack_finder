@@ -4,7 +4,10 @@ define(function () {
         var mapOptions = {
             zoom: 16,
         };
-        var gmap = new google.maps.Map(document.getElementById("map-canvas"), mapOptions);
+        var gmap = new google.maps.Map(
+            document.getElementById("map-canvas"),
+            mapOptions
+        );
         return new Map(gmap);
     }
 
@@ -34,41 +37,42 @@ define(function () {
     }
 
     Map.prototype.setStartLocation = function(center) {
+        var that = this;
         if (!center.equals(this.getStartLocation())) {
             this.startLocation = center;
-            this.redraw();
+            getNearbyParkingSpots(this.startLocation, function(spots) {
+                that.parkingSpots = spots;
+                _.each(that.routes, function(route) {
+                    route.calculateDirections(that.startLocation, that.parkingSpots, function() {});
+                });
+                that.redraw();
+            });
         }
     }
 
+    /*
+     * Erase each of the parking spots from the map.
+     */
     Map.prototype.erase = function() {
         _.each(this.parkingSpots, function(spot) {
-            spot.clear();
+            spot.erase();
         });
     }
 
+    /*
+     * Draw parking spots on the map.
+     */
     Map.prototype.draw = function() {
         var that = this;
-        getNearbyParkingSpots(this.startLocation, function(spots) {
-            that.parkingSpots = spots;
-            _.each(that.parkingSpots, function(spot) {
-                spot.draw(that.map);
-            });
-            _.each(that.routes, function(route) {
-                route.calculateDirections(that.startLocation, that.parkingSpots, function() {});
-            });
-            var bounds = getBounds(spots);
-            that.map.panToBounds(bounds);
-            if (_.some(spots, function(spot) {
-                return !that.map.getBounds().contains(spot.latLng);
-            })) {
-                that.map.fitBounds(bounds);
-            }
+        _.each(this.parkingSpots, function(spot) {
+            spot.draw(that.map);
         });
     }
 
     Map.prototype.redraw = function() {
         this.erase();
         this.draw();
+        fixBounds(this.map, this.parkingSpots);
     }
 
     Map.prototype.notify = function(event_name, data) {
@@ -92,30 +96,29 @@ define(function () {
     }
 
     var ParkingSpot = function(spot) {
+        this.spot = spot;
         this.latLng = new google.maps.LatLng(
             spot.latitude,
             spot.longitude
         );
-        var marker;
+        this.marker = null;
+    }
 
-        this.draw = function(map) {
-            if (typeof marker === "undefined") {
-                marker = new google.maps.Marker({
-                    map: map,
-                    // todo: this is redundant
-                    position: new google.maps.LatLng(
-                        spot.latitude,
-                        spot.longitude
-                    ),
-                    title: spot['location'],
-                });
-            }
-            return marker;
+    ParkingSpot.prototype.draw = function(map) {
+        if (this.marker === null) {
+            this.marker = new google.maps.Marker({
+                map: map,
+                position: this.latLng,
+                title: this.spot['location'],
+            });
         }
+    }
 
-        this.clear = function() {
-            marker.setMap(null);
+    ParkingSpot.prototype.erase = function() {
+        if (this.marker !== null) {
+            this.marker.setMap(null);
         }
+        this.marker = null;
     }
 
     /*
@@ -126,6 +129,20 @@ define(function () {
             return bounds.extend(spot.latLng);
         }, new google.maps.LatLngBounds());
         return bounds;
+    }
+
+    var fixBounds = function(map, targets) {
+        var bounds = getBounds(targets);
+        map.panToBounds(bounds);
+        if (_.some(targets, function(spot) {
+            var mapBounds = map.getBounds();
+            if (typeof mapBounds !== "undefined") {
+                return !mapBounds.contains(spot.latLng);
+            }
+            return false;
+        })) {
+            map.fitBounds(bounds);
+        }
     }
 
     return {
