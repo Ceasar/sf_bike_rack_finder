@@ -16,6 +16,17 @@ Features
 
 - Drag your location around and see what the nearest racks are at other places.
 
+Demo
+================================================================================
+
+Since the actual application tries to look up your location and you may not be
+in SF, you can demo the application by going to ``/demo`` with an address.
+Some interesting URLs:
+
+- http://findabikerack.herokuapp.com/demo?address=400%20van%20ness%20sf (City Hall)
+- http://findabikerack.herokuapp.com/demo?address=706%20Mission%20St,%20San%20Francisco,%20CA%2094103 (Uber HQ)
+- http://findabikerack.herokuapp.com/demo?address=3rd%20and%20King%20st%20sf (AT&T Park)
+
 Design rationale
 ================================================================================
 
@@ -48,13 +59,33 @@ interpret. If there's any reason to believe people will actually use this, the
 next step would be to reach out the maintainer of the dataset and clear up what
 it means.
 
-Demo
+Example code
 ================================================================================
 
-Since the actual application tries to look up your location and you may not be
-in SF, you can demo the application by going to ``/demo`` with an address.
-Some interesting URLs:
+The code of interest is mostly the Javascript_. It consists of three files:
+``main.js``, ``Route.js``, and ``Map.js``.
 
-- http://findabikerack.herokuapp.com/demo?address=400%20van%20ness%20sf (City Hall)
-- http://findabikerack.herokuapp.com/demo?address=706%20Mission%20St,%20San%20Francisco,%20CA%2094103 (Uber HQ)
-- http://findabikerack.herokuapp.com/demo?address=3rd%20and%20King%20st%20sf (AT&T Park)
+- main.js_ is responsible for finding the user's location (or the demo
+  location) and initializing the system.
+
+- Route.js_ is responsible for drawing routes.
+
+- Map.js_ is responsible for drawing the map and the markers.
+
+Of lesser interest is the `flask code`_, which provides an endpoint
+(``/closest``) for finding the 5 closest spots to a location (using Euclidean
+distance as a quick heuristic).
+
+.. _Javascript: https://github.com/Ceasar/uber_coding_challenge/tree/master/app/static/js
+.. _main.js: https://github.com/Ceasar/uber_coding_challenge/blob/master/app/static/js/main.js
+.. _Route.js: https://github.com/Ceasar/uber_coding_challenge/blob/master/app/static/js/Route.js
+.. _Map.js: https://github.com/Ceasar/uber_coding_challenge/blob/master/app/static/js/Map.js
+.. _flask code: https://github.com/Ceasar/uber_coding_challenge/blob/master/app/views/general.py
+
+About me
+================================================================================
+
+You can find out more about me by checking resume_ and the rest of my Github_.
+
+.. _resume: http://ceasarbautista.com/resume
+.. _Github: http://github.com/Ceasar
