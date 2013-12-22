@@ -40,12 +40,13 @@ define(function () {
         var that = this;
         if (!center.equals(this.getStartLocation())) {
             this.startLocation = center;
+            this.erase();
             getNearbyParkingSpots(this.startLocation, function(spots) {
                 that.parkingSpots = spots;
                 _.each(that.routes, function(route) {
                     route.calculateDirections(that.startLocation, that.parkingSpots, function() {});
                 });
-                that.redraw();
+                that.draw();
             });
         }
     }
@@ -67,11 +68,6 @@ define(function () {
         _.each(this.parkingSpots, function(spot) {
             spot.draw(that.map);
         });
-    }
-
-    Map.prototype.redraw = function() {
-        this.erase();
-        this.draw();
         fixBounds(this.map, this.parkingSpots);
     }
 
@@ -82,7 +78,7 @@ define(function () {
     }
 
     /*
-     * Get a set of parking spots nearby `latLng`.
+     * Get a set of parking spots near `latLng`.
      */
     function getNearbyParkingSpots(latLng, success) {
         $.getJSON("/closest", {
@@ -105,19 +101,15 @@ define(function () {
     }
 
     ParkingSpot.prototype.draw = function(map) {
-        if (this.marker === null) {
-            this.marker = new google.maps.Marker({
-                map: map,
-                position: this.latLng,
-                title: this.spot['location'],
-            });
-        }
+        this.marker = new google.maps.Marker({
+            map: map,
+            position: this.latLng,
+            title: this.spot['location'],
+        });
     }
 
     ParkingSpot.prototype.erase = function() {
-        if (this.marker !== null) {
-            this.marker.setMap(null);
-        }
+        this.marker.setMap(null);
         this.marker = null;
     }
 
