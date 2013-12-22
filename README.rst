@@ -4,6 +4,8 @@ SF Bicycle Parking
 This is a small application that looks up your location and then shows you how
 to get to the nearest bike rack, either by walking or bicycling.
 
+http://findabikerack.herokuapp.com/
+
 Features
 ================================================================================
 
@@ -41,6 +43,11 @@ Design rationale
   the user with each additional rack decreases after we hit the number where we
   can reliably provide the closest spots.
 
+**Disclaimer:** I'm not sure all of these spots are valid. The data is hard to
+interpret. If there's any reason to believe people will actually use this, the
+next step would be to reach out the maintainer of the dataset and clear up what
+it means.
+
 Demo
 ================================================================================
 
@@ -48,6 +55,6 @@ Since the actual application tries to look up your location and you may not be
 in SF, you can demo the application by going to ``/demo`` with an address.
 Some interesting URLs:
 
-- ``/demo?address=400%20van%20ness%20sf`` (City Hall)
-- ``/demo?address=706%20Mission%20St,%20San%20Francisco,%20CA%2094103`` (Uber HQ)
-- ``/demo?address=3rd%20and%20King%20st%20sf`` (AT&T Park)
+- http://findabikerack.herokuapp.com/demo?address=400%20van%20ness%20sf (City Hall)
+- http://findabikerack.herokuapp.com/demo?address=706%20Mission%20St,%20San%20Francisco,%20CA%2094103 (Uber HQ)
+- http://findabikerack.herokuapp.com/demo?address=3rd%20and%20King%20st%20sf (AT&T Park)
