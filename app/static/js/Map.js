@@ -1,7 +1,18 @@
 define(function () {
+
+    var makeMap = function() {
+        var mapOptions = {
+            zoom: 16,
+        };
+        var gmap = new google.maps.Map(document.getElementById("map-canvas"), mapOptions);
+        return new Map(gmap);
+    }
+
     var Map = function(map) {
-        var parkingSpots = [];
-        var routes =  [];
+        this.map = map;
+        this.parkingSpots = [];
+        this.routes = [];
+        this.startLocation = null;
 
         /*
          * Resize the bounds of `map` to include each of `targets`.
@@ -12,25 +23,52 @@ define(function () {
             }, new google.maps.LatLngBounds());
             return bounds;
         }
+    }
 
-        this.addRoute = function(route) {
-            route.setMap(map);
-            routes.push(route);
+    Map.prototype.addRoute = function(route) {
+        route.setMap(this.map);
+        route.subscribe(this);
+        this.routes.push(route);
+    }
+
+    Map.prototype.getCenter = function() {
+        return this.map.getCenter();
+    }
+
+    Map.prototype.setCenter = function(center) {
+        this.map.setCenter(center);
+    }
+
+    Map.prototype.getStartLocation = function(center) {
+        return this.startLocation;
+    }
+
+    Map.prototype.setStartLocation = function(center) {
+        if (!center.equals(this.getStartLocation())) {
+            this.startLocation = center;
+            this.draw();
         }
+    }
 
-        this.notify = function(center) {
-            _.each(parkingSpots, function(spot) {
-                spot.clear();
+    Map.prototype.draw = function() {
+        var that = this;
+        _.each(this.parkingSpots, function(spot) {
+            spot.clear();
+        });
+        getNearbyParkingSpots(this.startLocation, function(spots) {
+            that.parkingSpots = spots;
+            _.each(that.parkingSpots, function(spot) {
+                spot.draw(that.map);
             });
-            getNearbyParkingSpots(center, function(spots) {
-                parkingSpots = spots;
-                _.each(parkingSpots, function(spot) {
-                    spot.draw(map);
-                });
-                _.each(routes, function(route) {
-                    route.calculateDirections(center, parkingSpots, function() {});
-                });
+            _.each(that.routes, function(route) {
+                route.calculateDirections(that.startLocation, that.parkingSpots, function() {});
             });
+        });
+    }
+
+    Map.prototype.notify = function(event_name, data) {
+        if (event_name == 'start_location_changed' ) {
+            this.setStartLocation(data.start_location);
         }
     }
 
@@ -76,6 +114,6 @@ define(function () {
     }
 
     return {
-        Map: Map,
+        makeMap: makeMap,
     };
 });

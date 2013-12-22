@@ -38,17 +38,18 @@ define(function () {
     /*
      * Create a Route object.
      */
-    var makeRoute = function(origin, travelMode, gmap) {
+    var makeRoute = function(map, travelMode) {
         var directionsRenderer = new google.maps.DirectionsRenderer(ROUTE_OPTIONS);
         var route = new Route(travelMode, directionsRenderer);
 
         google.maps.event.addListener(directionsRenderer, 'directions_changed', function() {
-            var directions = directionsRenderer.getDirections();
-            var leg = directions.routes[0].legs[0];
-            if (origin.getCenter().equals(leg.start_location)) {
-                route.draw();
+            var leg = route.getLeg();
+            if (map.getStartLocation().equals(leg.start_location)) {
+                route.redraw();
             } else {
-                origin.setCenter(leg.start_location);
+                route.broadcast('start_location_changed', {
+                    start_location: leg.start_location,
+                });
             }
         });
         return route;
@@ -62,38 +63,39 @@ define(function () {
      */
     var Route = function(travelMode, directionsRenderer) {
         var directionsRenderer = directionsRenderer;
-        var markers = [];
+        this.markers = [];
+        var subscribers = [];
+        this.travelMode = travelMode;
 
-        this.draw = function() {
-            var map = directionsRenderer.getMap();
-            var directions = directionsRenderer.getDirections();
-            _.each(markers, function(marker) {
-                marker.setMap(null);
+        this.subscribe = function(subscriber) {
+            subscribers.push(subscriber);
+        }
+
+        this.broadcast = function(event_name, data) {
+            _.each(subscribers, function(subscriber) {
+                subscriber.notify(event_name, data);
             });
-            markers = [];
-            var leg = directions.routes[0].legs[0];
-            _.each(leg.steps, function(step) {
-                var marker = new google.maps.Marker({
-                    position: getMidpoint(step.start_location, step.end_location),
-                    icon: ICON_BY_TRAVEL_MODE[travelMode],
-                    zIndex: 1,
-                });
-                marker.setMap(map);
-                markers.push(marker);
-            });
+        }
+
+        this.getMap = function() {
+            return directionsRenderer.getMap();
         }
 
         this.setMap = function(gmap) {
             directionsRenderer.setMap(gmap);
         }
 
+        this.getDirections = function() {
+            return directionsRenderer.getDirections();
+        }
+
         /*
          * Calculate a path to the closest parking spot.
          */
-        this.calculateDirections = function(origin, parkingSpots, success) {
-            getClosestSpot(origin, parkingSpots, travelMode, function(closestSpot) {
+        this.calculateDirections = function(startLocation, parkingSpots, success) {
+            getClosestSpot(startLocation, parkingSpots, travelMode, function(closestSpot) {
                 var request = {
-                    origin: origin,
+                    origin: startLocation,
                     destination: closestSpot.latLng,
                     travelMode: travelMode,
                 };
@@ -107,16 +109,54 @@ define(function () {
         }
     }
 
+    Route.prototype.getLeg = function() {
+        var directions = this.getDirections();
+        return directions.routes[0].legs[0];
+    }
 
     /*
-     * Get the closest parking spot to `origin` by `travelMode`.
+     * Erase markers from the path.
      */
-    function getClosestSpot(origin, parkingSpots, travelMode, success) {
+    Route.prototype.erase = function() {
+        _.each(this.markers, function(marker) {
+            marker.setMap(null);
+        });
+        this.markers = [];
+    }
+
+    /*
+     * Draw markers on the path.
+     */
+    Route.prototype.draw = function() {
+        var that = this;
+        var map = this.getMap();
+        var leg = this.getLeg();
+        _.each(leg.steps, function(step) {
+            var marker = new google.maps.Marker({
+                position: getMidpoint(step.start_location, step.end_location),
+                icon: ICON_BY_TRAVEL_MODE[that.travelMode],
+                zIndex: 1,
+            });
+            marker.setMap(map);
+            that.markers.push(marker);
+        });
+    }
+
+    Route.prototype.redraw = function() {
+        this.erase();
+        this.draw();
+    }
+
+
+    /*
+     * Get the closest parking spot to `startLocation` by `travelMode`.
+     */
+    function getClosestSpot(startLocation, parkingSpots, travelMode, success) {
         var spotByLatLng = _.indexBy(parkingSpots, function(spot) {
             return spot.latLng;
         });
         var addresses = _.keys(spotByLatLng);
-        getClosestLatLng(origin, addresses, travelMode, function(closestLatLng) {
+        getClosestLatLng(startLocation, addresses, travelMode, function(closestLatLng) {
             success(spotByLatLng[closestLatLng]);
         });
     }
@@ -134,14 +174,14 @@ define(function () {
 
     /*
      * Calls `success` with a map from `addresses` to their corresponding trip
-     * durations, measured in seconds, starting from `origin`.
+     * durations, measured in seconds, starting from `startLocation`.
      *
      * Note: For maximum robustness, addresses should be as specific as possible,
      * otherwise they may be interpreted as being in unexpected parts of the world.
      */
-    function getTimeAndDistanceByLatLng(origins, addresses, travelMode, success) {
+    function getTimeAndDistanceByLatLng(startLocations, addresses, travelMode, success) {
         distanceMatrixService.getDistanceMatrix({
-            origins: origins,
+            origins: startLocations,
             destinations: addresses,
             travelMode: travelMode,
         }, function(response, status) {
@@ -169,11 +209,11 @@ define(function () {
 
 
     /*
-     * Calls `success` with the address closest to `origin` by trip duration using
+     * Calls `success` with the address closest to `startLocation` by trip duration using
      * `travelMode`.
      */
-    function getClosestLatLng(origin, addresses, travelMode, success) {
-        getTimeAndDistanceByLatLng([origin], addresses, travelMode, function(durationAndDistanceByLatLng) {
+    function getClosestLatLng(startLocation, addresses, travelMode, success) {
+        getTimeAndDistanceByLatLng([startLocation], addresses, travelMode, function(durationAndDistanceByLatLng) {
             var closestLatLng = _.min(addresses, function(address) {
                 return durationAndDistanceByLatLng[address].duration;
             });

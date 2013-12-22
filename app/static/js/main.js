@@ -1,22 +1,15 @@
-require(["Origin", "Map", "Route"], function(Origin, Map, Route) {
+require(["Map", "Route"], function(Map, Route) {
 
     /*
      * Draw the map around `center`.
      */
     var draw = function(center) {
-        var mapOptions = {
-            zoom: 16,
-            center: center,
-        };
-        var gmap = new google.maps.Map(document.getElementById("map-canvas"), mapOptions);
-        var origin = new Origin.Origin(center);
-        var map = new Map.Map(gmap);
+        var map = Map.makeMap();
         _.each(Route.TRAVEL_MODES, function (travelMode) {
-            var route = Route.makeRoute(origin, travelMode);
-            map.addRoute(route);
+            map.addRoute(Route.makeRoute(map, travelMode));
         });
-        origin.subscribe(map);
-        origin.setCenter(center);
+        map.setCenter(center);
+        map.setStartLocation(center);
     }
 
     /*
