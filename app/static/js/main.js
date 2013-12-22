@@ -10,10 +10,11 @@ require(["Origin", "Map", "Route"], function(Origin, Map, Route) {
         };
         var gmap = new google.maps.Map(document.getElementById("map-canvas"), mapOptions);
         var origin = new Origin.Origin(center);
-        var routes = _.map(Route.TRAVEL_MODES, function (travelMode) {
-            return Route.makeRoute(origin, travelMode, gmap);
+        var map = new Map.Map(gmap);
+        _.each(Route.TRAVEL_MODES, function (travelMode) {
+            var route = Route.makeRoute(origin, travelMode);
+            map.addRoute(route);
         });
-        var map = new Map.Map(gmap, routes);
         origin.subscribe(map);
         origin.setCenter(center);
     }
@@ -46,8 +47,8 @@ require(["Origin", "Map", "Route"], function(Origin, Map, Route) {
     var main = function() {
         getCenter(function(center) {
             draw(center);
-        }
-    };);
+        });
+    }
 
     main();
 });

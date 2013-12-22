@@ -1,6 +1,7 @@
 define(function () {
-    var Map = function(map, routes) {
+    var Map = function(map) {
         var parkingSpots = [];
+        var routes =  [];
 
         /*
          * Resize the bounds of `map` to include each of `targets`.
@@ -10,6 +11,11 @@ define(function () {
                 return bounds.extend(spot.latLng);
             }, new google.maps.LatLngBounds());
             return bounds;
+        }
+
+        this.addRoute = function(route) {
+            route.setMap(map);
+            routes.push(route);
         }
 
         this.notify = function(center) {

@@ -40,14 +40,13 @@ define(function () {
      */
     var makeRoute = function(origin, travelMode, gmap) {
         var directionsRenderer = new google.maps.DirectionsRenderer(ROUTE_OPTIONS);
-        directionsRenderer.setMap(gmap);
         var route = new Route(travelMode, directionsRenderer);
 
         google.maps.event.addListener(directionsRenderer, 'directions_changed', function() {
             var directions = directionsRenderer.getDirections();
             var leg = directions.routes[0].legs[0];
             if (origin.getCenter().equals(leg.start_location)) {
-                route.draw(gmap);
+                route.draw();
             } else {
                 origin.setCenter(leg.start_location);
             }
@@ -61,11 +60,12 @@ define(function () {
      * Note: Since it is expected that several routes will be shown at once, icons
      * indicating the mode of travel are shown along with the route.
      */
-    Route = function(travelMode, directionsRenderer) {
+    var Route = function(travelMode, directionsRenderer) {
         var directionsRenderer = directionsRenderer;
         var markers = [];
 
-        this.draw = function(map) {
+        this.draw = function() {
+            var map = directionsRenderer.getMap();
             var directions = directionsRenderer.getDirections();
             _.each(markers, function(marker) {
                 marker.setMap(null);
@@ -81,6 +81,10 @@ define(function () {
                 marker.setMap(map);
                 markers.push(marker);
             });
+        }
+
+        this.setMap = function(gmap) {
+            directionsRenderer.setMap(gmap);
         }
 
         /*
@@ -178,7 +182,7 @@ define(function () {
     }
 
     return {
-        TRAVEL_MODES: [BICYCLING, WALKING];,
+        TRAVEL_MODES: [BICYCLING, WALKING],
         makeRoute: makeRoute,
     };
 });
