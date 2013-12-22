@@ -28,37 +28,33 @@ var main = function() {
     var travelModes = [BICYCLING, WALKING];
     function draw(center) {
         var mapOptions = {
-            zoom: 20,
+            zoom: 16,
             center: center,
         };
         var gmap = new google.maps.Map(document.getElementById("map-canvas"), mapOptions);
 
         var origin = new Origin(center);
 
-        getNearbyParkingSpots(center, function(parkingSpots) {
-            var map;
-            var routes = _.map(travelModes, function (travelMode) {
-                var directionsRenderer = new google.maps.DirectionsRenderer(ROUTE_OPTIONS);
-                directionsRenderer.setMap(gmap);
-                var route = new Route(travelMode, directionsRenderer);
+        var map;
+        var routes = _.map(travelModes, function (travelMode) {
+            var directionsRenderer = new google.maps.DirectionsRenderer(ROUTE_OPTIONS);
+            directionsRenderer.setMap(gmap);
+            var route = new Route(travelMode, directionsRenderer);
 
-                google.maps.event.addListener(directionsRenderer, 'directions_changed', function() {
-                    var directions = directionsRenderer.getDirections();
-                    var leg = directions.routes[0].legs[0];
-                    if (origin.getCenter().equals(leg.start_location)) {
-                        route.draw(gmap);
-                    } else {
-                        origin.setCenter(leg.start_location);
-                    }
-                });
-
-                origin.subscribe(route);
-                return route;
+            google.maps.event.addListener(directionsRenderer, 'directions_changed', function() {
+                var directions = directionsRenderer.getDirections();
+                var leg = directions.routes[0].legs[0];
+                if (origin.getCenter().equals(leg.start_location)) {
+                    route.draw(gmap);
+                } else {
+                    origin.setCenter(leg.start_location);
+                }
             });
-            map = new Map(gmap, parkingSpots, routes);
-            origin.subscribe(map);
-            origin.setCenter(center);
+            return route;
         });
+        map = new Map(gmap, routes);
+        origin.subscribe(map);
+        origin.setCenter(center);
     }
     var data = $('#json').text();
     if (data) {
@@ -95,34 +91,31 @@ Origin = function(center) {
     }
 }
 
-Map = function(map, parkingSpots, routes) {
-    var parkingSpots = parkingSpots; 
-    var routes = routes;
+Map = function(map, routes) {
+    var parkingSpots = [];
 
     /*
      * Resize the bounds of `map` to include each of `targets`.
      */
-    var resizeBounds = function(targets) {
+    var getBounds = function(targets) {
         var bounds = _.foldl(targets, function(bounds, spot) {
             return bounds.extend(spot.latLng);
-        }, map.getBounds());
-        map.fitBounds(bounds);
-    }
-
-    this.draw = function() {
-        var origin = map.getCenter();
-        _.each(parkingSpots, function(spot) {
-            spot.draw(map);
-        });
-        google.maps.event.addListener(map, 'tilesloaded', _.once(function() {
-            resizeBounds(parkingSpots);
-        }));
+        }, new google.maps.LatLngBounds());
+        return bounds;
     }
 
     this.notify = function(center) {
-        this.draw();
-        _.each(routes, function(route) {
-            route.calculateDirections(center, parkingSpots, function() {});
+        _.each(parkingSpots, function(spot) {
+            spot.clear();
+        });
+        getNearbyParkingSpots(center, function(spots) {
+            parkingSpots = spots;
+            _.each(parkingSpots, function(spot) {
+                spot.draw(map);
+            });
+            _.each(routes, function(route) {
+                route.calculateDirections(center, parkingSpots, function() {});
+            });
         });
     }
 }
@@ -147,6 +140,10 @@ ParkingSpot = function(spot) {
             });
         }
         return marker;
+    }
+
+    this.clear = function() {
+        marker.setMap(null);
     }
 }
 
@@ -176,9 +173,6 @@ function Route(travelMode, directionsRenderer) {
             marker.setMap(map);
             markers.push(marker);
         });
-    }
-
-    this.notify = function(origin) {
     }
 
     /*
