@@ -8,9 +8,16 @@ require(["Map", "Route"], function(Map, Route) {
         var data = $('#json').text();
         if (data) {
             var json = JSON.parse(data);
-            var startLocation = new google.maps.LatLng(json['latitude'],
-                                                       json['longitude']);
-            success(startLocation);
+            var geocoder = new google.maps.Geocoder();
+            console.log(json);
+            geocoder.geocode({'address': json.address}, function(results, status) {
+                    if (status == google.maps.GeocoderStatus.OK) {
+                        var startLocation = results[0].geometry.location;
+                        console.log(startLocation);
+                        success(startLocation);
+                    }
+            })
+
         } else {
             navigator.geolocation.getCurrentPosition(function(position) {
                 var startLocation = new google.maps.LatLng(

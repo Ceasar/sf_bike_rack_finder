@@ -77,8 +77,7 @@ def demo():
     Dump user-supplied coordinates to the page to replace looking up user's
     current location.
     """
-    coordinates = {
-        "latitude": float(request.args['latitude']),
-        "longitude": float(request.args['longitude']),
+    data = {
+        "address": request.args['address'],
     }
-    return render_template("index.html", json=json.dumps(coordinates))
+    return render_template("index.html", json=json.dumps(data))
