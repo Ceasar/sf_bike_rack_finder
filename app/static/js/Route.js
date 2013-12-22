@@ -1,12 +1,31 @@
 define(function () {
+    // A DirectionsService, used to compute directions between points.
     var directionsService = new google.maps.DirectionsService();
+
+    // A DistanceMatrixService, used to compute distances between a set of
+    // points.
     var distanceMatrixService = new google.maps.DistanceMatrixService();
 
     var BICYCLING = google.maps.TravelMode.BICYCLING;
     var WALKING = google.maps.TravelMode.WALKING;
-    var travelModes = [BICYCLING, WALKING];
 
-    // Use orange to constant with blue travel mode icons
+    /*  Icons representing each travel mode.
+     *
+     *  - Bicycling is represented as a man on a bicycle.
+     *  - Walking is representing by the walk icon used on pedestrian crossing 
+     *    signs.
+     *
+     * Both icons are blue and were taken from Google Maps.
+     */ 
+    var ICON_BY_TRAVEL_MODE = {
+        BICYCLING: '/static/img/bicycle.png',
+        WALKING: '/static/img/walk.png',
+    }
+
+    /* The color of the route.
+     *
+     * Note: We use orange to constant with blue travel mode icons.
+     */
     var ROUTE_COLOR = 'ffaa00';
     var ROUTE_OPTIONS = {
         draggable: true,
@@ -15,12 +34,10 @@ define(function () {
         },
         preserveViewport: true,
     };
-    // Icons are taken from Google Maps
-    var iconByTravelMode = {
-        BICYCLING: '/static/img/bicycle.png',
-        WALKING: '/static/img/walk.png',
-    }
 
+    /*
+     * Create a Route object.
+     */
     var makeRoute = function(origin, travelMode, gmap) {
         var directionsRenderer = new google.maps.DirectionsRenderer(ROUTE_OPTIONS);
         directionsRenderer.setMap(gmap);
@@ -58,7 +75,7 @@ define(function () {
             _.each(leg.steps, function(step) {
                 var marker = new google.maps.Marker({
                     position: getMidpoint(step.start_location, step.end_location),
-                    icon: iconByTravelMode[travelMode],
+                    icon: ICON_BY_TRAVEL_MODE[travelMode],
                     zIndex: 1,
                 });
                 marker.setMap(map);
@@ -161,7 +178,7 @@ define(function () {
     }
 
     return {
-        travelModes: travelModes,
+        TRAVEL_MODES: [BICYCLING, WALKING];,
         makeRoute: makeRoute,
     };
 });
