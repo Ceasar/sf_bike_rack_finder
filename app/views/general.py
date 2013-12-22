@@ -70,4 +70,4 @@ def closest():
                               float(request.args['longitude']))
     parking_spots = sorted(get_parking_spots(), 
                            key=lambda ps: ps.distance(coordinates))
-    return json.dumps([ps.dict() for ps in parking_spots[:10]])
+    return json.dumps([ps.dict() for ps in parking_spots[:5]])

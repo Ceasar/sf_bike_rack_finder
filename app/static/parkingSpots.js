@@ -1,5 +1,10 @@
 // var SF = new google.maps.LatLng(37.785333, -122.417667);
 var SF = new google.maps.LatLng(37.783133, -122.417667);
+// var SF = new google.maps.LatLng(37.781333, -122.417667); // near city hall
+// var SF = new google.maps.LatLng(37.783133, -122.402667); // near yerba buena
+
+// Use orange to constant with blue travel mode icons
+var ROUTE_COLOR = 'ffaa00';
 
 var BICYCLING = google.maps.TravelMode.BICYCLING;
 var WALKING = google.maps.TravelMode.WALKING;
@@ -7,80 +12,85 @@ var iconByTravelMode = {
     BICYCLING: '/static/img/bicycle.png',
     WALKING: '/static/img/walk.png',
 }
+
 var Marker = google.maps.Marker;
 
 
 var directionsService = new google.maps.DirectionsService();
 var distanceMatrixService = new google.maps.DistanceMatrixService();
 
-var map;
 
 /*
- * Show bicycling and walking directions to the closest bike parking spots from
- * `origin`.
+ * Show directions to the closest bike parking spots from `origin` for a variety
+ * of travel modes.
  */
-var main = function(origin) {
-    getNearbySpots(origin, function(parkingSpots) {
-        // Note: Addresses contain only the street address, and are assumed to
-        // be in San Francisco, CA.
-        var spotsByAddress = _.indexBy(parkingSpots, function(spot) {
-            return spot.address.toLowerCase() + " san francisco, ca";
-        });
-        var addresses = _.keys(spotsByAddress);
-        var travelModes = [BICYCLING, WALKING];
-        getClosestAddressByMode(origin, addresses, travelModes, function(closestAddressByMode) {
-            var closestSpotByMode = {
-                WALKING: spotsByAddress[closestAddressByMode[WALKING]],
-                BICYCLING: spotsByAddress[closestAddressByMode[BICYCLING]],
-            }
-            google.maps.event.addListener(map, 'tilesloaded', _.once(function() {
-                var targets = [closestSpotByMode[WALKING], closestSpotByMode[BICYCLING]];
-                var bounds = _.foldl(targets, function(bounds, spot) {
-                    return bounds.extend(spotToLatLng(spot));
-                },map.getBounds());
-                map.fitBounds(bounds);
-            }));
-            _.each(parkingSpots, function(spot) {
-                var marker = new Marker({
-                    position: spotToLatLng(spot),
-                    title: spot['location']
-                });
-                if (spot === closestSpotByMode[WALKING]) {
-                    marker.setAnimation(google.maps.Animation.BOUNCE);
-                } else if (spot === closestSpotByMode[BICYCLING]) {
-                    marker.setAnimation(google.maps.Animation.BOUNCE);
-                }
-                marker.setMap(map);
-            });
-            _.each(travelModes, function(travelMode) {
-                var options = {
-                    draggable: true,
-                    markerOptions: {
-                        // visible: false,
-                    },
-                    polylineOptions: {
-                        strokeColor: 'ffaa00',
-                    }
-                };
-                displayDirections(
-                    origin,
-                    spotToLatLng(closestSpotByMode[travelMode]),
-                    travelMode,
-                    options
-                );
-            });
-        });
-    });
-}
-
 var initialize = function() {
     var mapOptions = {
         center: SF,
     }
-    map = new google.maps.Map(document.getElementById("map-canvas"), mapOptions);
-    map.setTilt(0);
-    main(SF);
+    var map = new google.maps.Map(document.getElementById("map-canvas"), mapOptions);
+    var travelModes = [BICYCLING, WALKING];
+    var origin = SF;
+    getNearbyParkingSpots(origin, function(parkingSpots) {
+        getClosestSpotByMode(origin, parkingSpots, travelModes, function(closestSpotByMode) {
+            var closestSpots = _.values(closestSpotByMode);
+            drawParkingSpots(map, parkingSpots, closestSpots);
+            _.each(travelModes, function(travelMode) {
+                drawRoute(map, origin, closestSpotByMode[travelMode].latLng, travelMode);
+            });
+            google.maps.event.addListener(map, 'tilesloaded', _.once(function() {
+                resizeBounds(map, closestSpots);
+            }));
+        });
+    });
 };
+
+
+/*
+ * Draw each parking spot on the map.
+ *
+ * Close parking spots will be emphasized.
+ */
+function drawParkingSpots(map, parkingSpots, closestSpots) {
+    _.each(parkingSpots, function(spot) {
+        var marker = new Marker({
+            position: spot.latLng,
+            title: spot['location']
+        });
+        if (_.contains(closestSpots, spot)) {
+            marker.setAnimation(google.maps.Animation.BOUNCE);
+        }
+        marker.setMap(map);
+    });
+}
+
+/*
+ * Resize the bounds of `map` to include each of `targets`.
+ */
+function resizeBounds(map, targets) {
+    var bounds = _.foldl(targets, function(bounds, spot) {
+        return bounds.extend(spot.latLng);
+    }, map.getBounds());
+    map.fitBounds(bounds);
+}
+
+
+/*
+ * For each travel mode, get the closest spot to `origin`.
+ */
+function getClosestSpotByMode(origin, parkingSpots, travelModes, success) {
+    var spotByLatLng = _.indexBy(parkingSpots, function(spot) {
+        return spot.latLng;
+    });
+    var addresses = _.keys(spotByLatLng);
+    getClosestLatLngByMode(origin, addresses, travelModes, function(closestLatLngByMode) {
+        var closestSpotByMode = _.foldl(travelModes, function(memo, travelMode) {
+            memo[travelMode] = spotByLatLng[closestLatLngByMode[travelMode]];
+            return memo;
+        }, {});
+        success(closestSpotByMode);
+    });
+}
 
 /*
  * Get the midpoint between two latLngs.
@@ -98,7 +108,13 @@ function getMidpoint(latLng1, latLng2) {
  * Note: Since it is expected that several routes will be shown at once, icons
  * indicating the mode of travel are shown along with the route.
  */
-function displayDirections(start, end, travelMode, options) {
+function drawRoute(map, start, end, travelMode) {
+    var options = {
+        draggable: true,
+        polylineOptions: {
+            strokeColor: ROUTE_COLOR,
+        }
+    };
     var directionsRenderer = new google.maps.DirectionsRenderer(options);
     var request = {
         origin: start,
@@ -122,15 +138,6 @@ function displayDirections(start, end, travelMode, options) {
     });
 }
 
-/*
- * Convert a parking spot to a LatLng.
- */
-function spotToLatLng(spot) {
-    return new google.maps.LatLng(
-        spot.latitude,
-        spot.longitude
-    );
-}
 
 /*
  * Calls `success` with a map from `addresses` to their corresponding trip
@@ -139,7 +146,7 @@ function spotToLatLng(spot) {
  * Note: For maximum robustness, addresses should be as specific as possible,
  * otherwise they may be interpreted as being in unexpected parts of the world.
  */
-function getTimeAndDistanceByAddress(origins, addresses, travelMode, success) {
+function getTimeAndDistanceByLatLng(origins, addresses, travelMode, success) {
     distanceMatrixService.getDistanceMatrix({
         origins: origins,
         destinations: addresses,
@@ -154,7 +161,7 @@ function getTimeAndDistanceByAddress(origins, addresses, travelMode, success) {
                 _.pluck(response.rows[0].elements, 'distance'),
                 'value'
             );
-            var durationAndDistanceByAddress = _.object(addresses, 
+            var durationAndDistanceByLatLng = _.object(addresses, 
                 _.map(_.zip(durations, distances), function(t) {
                     return {
                         duration: t[0],
@@ -162,7 +169,7 @@ function getTimeAndDistanceByAddress(origins, addresses, travelMode, success) {
                     }
                 })
             );
-            success(durationAndDistanceByAddress);
+            success(durationAndDistanceByLatLng);
         }
     });
 }
@@ -171,15 +178,15 @@ function getTimeAndDistanceByAddress(origins, addresses, travelMode, success) {
  * Calls `success` with the address closest to `origin` by trip duration using
  * `travelMode`.
  */
-function getClosestAddressByMode(origin, addresses, travelModes, success) {
-    var closestAddressByMode = {};
+function getClosestLatLngByMode(origin, addresses, travelModes, success) {
+    var closestLatLngByMode = {};
     var finish = _.after(travelModes.length, function() {
-        success(closestAddressByMode);
+        success(closestLatLngByMode);
     });
     _.each(travelModes, function(travelMode) {
-        getTimeAndDistanceByAddress([origin], addresses, travelMode, function(durationAndDistanceByAddress) {
-            closestAddressByMode[travelMode] = _.min(addresses, function(address) {
-                return durationAndDistanceByAddress[address].duration;
+        getTimeAndDistanceByLatLng([origin], addresses, travelMode, function(durationAndDistanceByLatLng) {
+            closestLatLngByMode[travelMode] = _.min(addresses, function(address) {
+                return durationAndDistanceByLatLng[address].duration;
             });
             finish();
 
@@ -190,12 +197,19 @@ function getClosestAddressByMode(origin, addresses, travelModes, success) {
 /*
  * Get a set of parking spots nearby `latLng`.
  */
-function getNearbySpots(latLng, success) {
+function getNearbyParkingSpots(latLng, success) {
     $.getJSON("/closest", {
         latitude: latLng.lat(),
         longitude: latLng.lng(),
-    }, success
-    );
+    }, function(parkingSpots) {
+        success(_.map(parkingSpots, function(spot) {
+            spot.latLng = new google.maps.LatLng(
+                spot.latitude,
+                spot.longitude
+            );
+            return spot;
+        }))
+    });
 }
 
 google.maps.event.addDomListener(window, 'load', initialize);
