@@ -82,6 +82,16 @@ distance as a quick heuristic).
 .. _Map.js: https://github.com/Ceasar/uber_coding_challenge/blob/master/app/static/js/Map.js
 .. _flask code: https://github.com/Ceasar/uber_coding_challenge/blob/master/app/views/general.py
 
+**Disclaimer:** I am not sure this project is quite representative of my work.
+As this was mostly javascript, there are a lot of pieces that I am unfamiliar
+with that I would not be so if the project were more server heavy (where I could
+show off my Python knowledge). I recommend also checking out twosheds_ and
+staticjinja_ which are open-source Python projects I maintain carefully, for
+actual users.
+
+.. _twosheds: https://github.com/Ceasar/twosheds
+.. _staticjinja: https://github.com/Ceasar/staticjinja
+
 About me
 ================================================================================
 
