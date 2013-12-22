@@ -60,8 +60,7 @@ def get_parking_spots():
 
 @app.route('/')
 def index():
-    parking_spots = get_parking_spots()
-    return render_template("index.html", parking_spots=parking_spots)
+    return render_template("index.html")
 
 @app.route('/closest')
 def closest():
@@ -71,3 +70,15 @@ def closest():
     parking_spots = sorted(get_parking_spots(), 
                            key=lambda ps: ps.distance(coordinates))
     return json.dumps([ps.dict() for ps in parking_spots[:5]])
+
+@app.route('/demo')
+def demo():
+    """
+    Dump user-supplied coordinates to the page to replace looking up user's
+    current location.
+    """
+    coordinates = {
+        "latitude": float(request.args['latitude']),
+        "longitude": float(request.args['longitude']),
+    }
+    return render_template("index.html", json=json.dumps(coordinates))

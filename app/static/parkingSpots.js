@@ -1,23 +1,16 @@
-// var SF = new google.maps.LatLng(37.785333, -122.417667);
-var SF = new google.maps.LatLng(37.783133, -122.417667);
-// var SF = new google.maps.LatLng(37.781333, -122.417667); // near city hall
-// var SF = new google.maps.LatLng(37.783133, -122.402667); // near yerba buena
+var directionsService = new google.maps.DirectionsService();
+var distanceMatrixService = new google.maps.DistanceMatrixService();
+var Marker = google.maps.Marker;
+var BICYCLING = google.maps.TravelMode.BICYCLING;
+var WALKING = google.maps.TravelMode.WALKING;
 
 // Use orange to constant with blue travel mode icons
 var ROUTE_COLOR = 'ffaa00';
-
-var BICYCLING = google.maps.TravelMode.BICYCLING;
-var WALKING = google.maps.TravelMode.WALKING;
+// Icons are taken from Google Maps
 var iconByTravelMode = {
     BICYCLING: '/static/img/bicycle.png',
     WALKING: '/static/img/walk.png',
 }
-
-var Marker = google.maps.Marker;
-
-
-var directionsService = new google.maps.DirectionsService();
-var distanceMatrixService = new google.maps.DistanceMatrixService();
 
 
 /*
@@ -25,12 +18,26 @@ var distanceMatrixService = new google.maps.DistanceMatrixService();
  * of travel modes.
  */
 var initialize = function() {
-    var mapOptions = {
-        center: SF,
-    }
-    var map = new google.maps.Map(document.getElementById("map-canvas"), mapOptions);
+    var map = new google.maps.Map(document.getElementById("map-canvas"));
     var travelModes = [BICYCLING, WALKING];
-    var origin = SF;
+    var data = $('#json').text();
+    if (data) {
+        var json = JSON.parse(data);
+        drawMap(map,
+                new google.maps.LatLng(json['latitude'],
+                                       json['longitude']),
+                travelModes);
+    } else {
+        navigator.geolocation.getCurrentPosition(function(position) {
+            drawMap(map,
+                    new google.maps.LatLng(position.coords.latitude,
+                                           position.coords.longitude),
+                    travelModes);
+        })
+    }
+};
+
+function drawMap(map, origin, travelModes) {
     getNearbyParkingSpots(origin, function(parkingSpots) {
         getClosestSpotByMode(origin, parkingSpots, travelModes, function(closestSpotByMode) {
             var closestSpots = _.values(closestSpotByMode);
@@ -43,7 +50,7 @@ var initialize = function() {
             }));
         });
     });
-};
+}
 
 
 /*
