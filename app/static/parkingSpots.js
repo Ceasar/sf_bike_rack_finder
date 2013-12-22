@@ -18,36 +18,39 @@ var iconByTravelMode = {
  * of travel modes.
  */
 var initialize = function() {
-    var map = new google.maps.Map(document.getElementById("map-canvas"));
-    var travelModes = [BICYCLING, WALKING];
+    function draw(center) {
+        var mapOptions = {
+            zoom: 20,
+            center: center,
+        };
+        var map = new google.maps.Map(document.getElementById("map-canvas"), mapOptions);
+        var travelModes = [BICYCLING, WALKING];
+        drawMap(map, center, travelModes);
+    }
     var data = $('#json').text();
     if (data) {
         var json = JSON.parse(data);
-        drawMap(map,
-                new google.maps.LatLng(json['latitude'],
-                                       json['longitude']),
-                travelModes);
+        var center = new google.maps.LatLng(json['latitude'],
+                                            json['longitude']);
+        draw(center);
     } else {
         navigator.geolocation.getCurrentPosition(function(position) {
-            drawMap(map,
-                    new google.maps.LatLng(position.coords.latitude,
-                                           position.coords.longitude),
-                    travelModes);
+            var center = new google.maps.LatLng(position.coords.latitude,
+                                                position.coords.longitude);
+            draw(center);
         })
     }
 };
 
 function drawMap(map, origin, travelModes) {
     getNearbyParkingSpots(origin, function(parkingSpots) {
-        getClosestSpotByMode(origin, parkingSpots, travelModes, function(closestSpotByMode) {
-            var closestSpots = _.values(closestSpotByMode);
-            drawParkingSpots(map, parkingSpots, closestSpots);
-            _.each(travelModes, function(travelMode) {
-                drawRoute(map, origin, closestSpotByMode[travelMode].latLng, travelMode);
-            });
-            google.maps.event.addListener(map, 'tilesloaded', _.once(function() {
-                resizeBounds(map, closestSpots);
-            }));
+        drawParkingSpots(map, parkingSpots);
+        google.maps.event.addListener(map, 'tilesloaded', _.once(function() {
+            resizeBounds(map, parkingSpots);
+        }));
+        _.each(travelModes, function(travelMode) {
+            var route = new Route(map, travelMode, parkingSpots);
+            route.setOrigin(origin);
         });
     });
 }
@@ -58,16 +61,13 @@ function drawMap(map, origin, travelModes) {
  *
  * Close parking spots will be emphasized.
  */
-function drawParkingSpots(map, parkingSpots, closestSpots) {
+function drawParkingSpots(map, parkingSpots) {
     _.each(parkingSpots, function(spot) {
         var marker = new Marker({
+            map: map,
             position: spot.latLng,
-            title: spot['location']
+            title: spot['location'],
         });
-        if (_.contains(closestSpots, spot)) {
-            marker.setAnimation(google.maps.Animation.BOUNCE);
-        }
-        marker.setMap(map);
     });
 }
 
@@ -86,16 +86,28 @@ function resizeBounds(map, targets) {
  * For each travel mode, get the closest spot to `origin`.
  */
 function getClosestSpotByMode(origin, parkingSpots, travelModes, success) {
+    var closestSpotByMode = {};
+    var finish = _.after(travelModes.length, function() {
+        success(closestSpotByMode);
+    });
+    _.each(travelModes, function(travelMode) {
+        getClosestSpot(origin, parkingSpots, travelMode, function(closestSpot) {
+            closestSpotByMode[travelMode] = closestSpot;
+            finish();
+        });
+    });
+}
+
+/*
+ * Get the closest parking spot to `origin` by `travelMode`.
+ */
+function getClosestSpot(origin, parkingSpots, travelMode, success) {
     var spotByLatLng = _.indexBy(parkingSpots, function(spot) {
         return spot.latLng;
     });
     var addresses = _.keys(spotByLatLng);
-    getClosestLatLngByMode(origin, addresses, travelModes, function(closestLatLngByMode) {
-        var closestSpotByMode = _.foldl(travelModes, function(memo, travelMode) {
-            memo[travelMode] = spotByLatLng[closestLatLngByMode[travelMode]];
-            return memo;
-        }, {});
-        success(closestSpotByMode);
+    getClosestLatLng(origin, addresses, travelMode, function(closestLatLng) {
+        success(spotByLatLng[closestLatLng]);
     });
 }
 
@@ -115,23 +127,24 @@ function getMidpoint(latLng1, latLng2) {
  * Note: Since it is expected that several routes will be shown at once, icons
  * indicating the mode of travel are shown along with the route.
  */
-function drawRoute(map, start, end, travelMode) {
+function Route(map, travelMode, parkingSpots) {
+    var origin;
     var options = {
         draggable: true,
         polylineOptions: {
             strokeColor: ROUTE_COLOR,
-        }
+        },
+        preserveViewport: true,
     };
     var directionsRenderer = new google.maps.DirectionsRenderer(options);
     directionsRenderer.setMap(map);
-    var request = {
-        origin: start,
-        destination: end,
-        travelMode: travelMode,
-    };
     var markers = [];
 
     function draw(directions) {
+        _.each(markers, function(marker) {
+            marker.setMap(null);
+        });
+        markers = [];
         var leg = directions.routes[0].legs[0];
         _.each(leg.steps, function(step) {
             var marker = new Marker({
@@ -144,18 +157,38 @@ function drawRoute(map, start, end, travelMode) {
         });
     }
 
-    directionsService.route(request, function(result, status) {
-        if (status == google.maps.DirectionsStatus.OK) {
-            directionsRenderer.setDirections(result);
-            draw(result);
-        }
-    });
-    google.maps.event.addListener(directionsRenderer, 'directions_changed', function() {
-        _.each(markers, function(marker) {
-            marker.setMap(null);
+    /*
+     * Calculate a path to the closest parking spot.
+     */
+    var calculate = function() {
+        getClosestSpot(origin, parkingSpots, travelMode, function(closestSpot) {
+            var request = {
+                origin: origin,
+                destination: closestSpot.latLng,
+                travelMode: travelMode,
+            };
+            directionsService.route(request, function(result, status) {
+                if (status == google.maps.DirectionsStatus.OK) {
+                    directionsRenderer.setDirections(result);
+                }
+            });
         });
-        markers = [];
-        draw(directionsRenderer.getDirections());
+    }
+
+    this.setOrigin= function(val) {
+        origin = val;
+        calculate();
+    }
+
+    google.maps.event.addListener(directionsRenderer, 'directions_changed', function() {
+        var directions = directionsRenderer.getDirections();
+        var leg = directions.routes[0].legs[0];
+        if (origin.equals(leg.start_location)) {
+            draw(directions);
+        } else {
+            origin = leg.start_location;
+            calculate();
+        }
     });
     
 }
@@ -196,23 +229,17 @@ function getTimeAndDistanceByLatLng(origins, addresses, travelMode, success) {
     });
 }
 
+
 /*
  * Calls `success` with the address closest to `origin` by trip duration using
  * `travelMode`.
  */
-function getClosestLatLngByMode(origin, addresses, travelModes, success) {
-    var closestLatLngByMode = {};
-    var finish = _.after(travelModes.length, function() {
-        success(closestLatLngByMode);
-    });
-    _.each(travelModes, function(travelMode) {
-        getTimeAndDistanceByLatLng([origin], addresses, travelMode, function(durationAndDistanceByLatLng) {
-            closestLatLngByMode[travelMode] = _.min(addresses, function(address) {
-                return durationAndDistanceByLatLng[address].duration;
-            });
-            finish();
-
+function getClosestLatLng(origin, addresses, travelMode, success) {
+    getTimeAndDistanceByLatLng([origin], addresses, travelMode, function(durationAndDistanceByLatLng) {
+        var closestLatLng = _.min(addresses, function(address) {
+            return durationAndDistanceByLatLng[address].duration;
         });
+        success(closestLatLng);
     });
 }
 
