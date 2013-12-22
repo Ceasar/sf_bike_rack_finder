@@ -68,6 +68,7 @@ define(function () {
         _.each(this.parkingSpots, function(spot) {
             spot.draw(that.map);
         });
+        this.map.panTo(this.startLocation);
         fixBounds(this.map, this.parkingSpots);
     }
 
