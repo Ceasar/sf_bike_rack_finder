@@ -123,26 +123,41 @@ function drawRoute(map, start, end, travelMode) {
         }
     };
     var directionsRenderer = new google.maps.DirectionsRenderer(options);
+    directionsRenderer.setMap(map);
     var request = {
         origin: start,
         destination: end,
         travelMode: travelMode,
     };
+    var markers = [];
+
+    function draw(directions) {
+        var leg = directions.routes[0].legs[0];
+        _.each(leg.steps, function(step) {
+            var marker = new Marker({
+                position: getMidpoint(step.start_location, step.end_location),
+                icon: iconByTravelMode[travelMode],
+                zIndex: 1,
+            });
+            marker.setMap(map);
+            markers.push(marker);
+        });
+    }
+
     directionsService.route(request, function(result, status) {
         if (status == google.maps.DirectionsStatus.OK) {
             directionsRenderer.setDirections(result);
-            directionsRenderer.setMap(map);
-            var leg = result.routes[0].legs[0];
-            _.each(leg.steps, function(step) {
-                var marker = new Marker({
-                    position: getMidpoint(step.start_location, step.end_location),
-                    icon: iconByTravelMode[travelMode],
-                    zIndex: 1,
-                });
-                marker.setMap(map);
-            });
+            draw(result);
         }
     });
+    google.maps.event.addListener(directionsRenderer, 'directions_changed', function() {
+        _.each(markers, function(marker) {
+            marker.setMap(null);
+        });
+        markers = [];
+        draw(directionsRenderer.getDirections());
+    });
+    
 }
 
 
