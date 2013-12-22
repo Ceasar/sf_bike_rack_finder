@@ -197,22 +197,6 @@ function Route(travelMode, directionsRenderer) {
 
 
 /*
- * For each travel mode, get the closest spot to `origin`.
- */
-function getClosestSpotByMode(origin, parkingSpots, travelModes, success) {
-    var closestSpotByMode = {};
-    var finish = _.after(travelModes.length, function() {
-        success(closestSpotByMode);
-    });
-    _.each(travelModes, function(travelMode) {
-        getClosestSpot(origin, parkingSpots, travelMode, function(closestSpot) {
-            closestSpotByMode[travelMode] = closestSpot;
-            finish();
-        });
-    });
-}
-
-/*
  * Get the closest parking spot to `origin` by `travelMode`.
  */
 function getClosestSpot(origin, parkingSpots, travelMode, success) {
