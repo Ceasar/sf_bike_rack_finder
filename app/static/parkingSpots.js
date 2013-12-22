@@ -6,6 +6,13 @@ var WALKING = google.maps.TravelMode.WALKING;
 
 // Use orange to constant with blue travel mode icons
 var ROUTE_COLOR = 'ffaa00';
+var ROUTE_OPTIONS = {
+    draggable: true,
+    polylineOptions: {
+        strokeColor: ROUTE_COLOR,
+    },
+    preserveViewport: true,
+};
 // Icons are taken from Google Maps
 var iconByTravelMode = {
     BICYCLING: '/static/img/bicycle.png',
@@ -17,15 +24,41 @@ var iconByTravelMode = {
  * Show directions to the closest bike parking spots from `origin` for a variety
  * of travel modes.
  */
-var initialize = function() {
+var main = function() {
+    var travelModes = [BICYCLING, WALKING];
     function draw(center) {
         var mapOptions = {
             zoom: 20,
             center: center,
         };
-        var map = new google.maps.Map(document.getElementById("map-canvas"), mapOptions);
-        var travelModes = [BICYCLING, WALKING];
-        drawMap(map, center, travelModes);
+        var gmap = new google.maps.Map(document.getElementById("map-canvas"), mapOptions);
+
+        var origin = new Origin(center);
+
+        getNearbyParkingSpots(center, function(parkingSpots) {
+            var map;
+            var routes = _.map(travelModes, function (travelMode) {
+                var directionsRenderer = new google.maps.DirectionsRenderer(ROUTE_OPTIONS);
+                directionsRenderer.setMap(gmap);
+                var route = new Route(travelMode, directionsRenderer);
+
+                google.maps.event.addListener(directionsRenderer, 'directions_changed', function() {
+                    var directions = directionsRenderer.getDirections();
+                    var leg = directions.routes[0].legs[0];
+                    if (origin.getCenter().equals(leg.start_location)) {
+                        route.draw(gmap);
+                    } else {
+                        origin.setCenter(leg.start_location);
+                    }
+                });
+
+                origin.subscribe(route);
+                return route;
+            });
+            map = new Map(gmap, parkingSpots, routes);
+            origin.subscribe(map);
+            origin.setCenter(center);
+        });
     }
     var data = $('#json').text();
     if (data) {
@@ -42,43 +75,130 @@ var initialize = function() {
     }
 };
 
-function drawMap(map, origin, travelModes) {
-    getNearbyParkingSpots(origin, function(parkingSpots) {
-        drawParkingSpots(map, parkingSpots);
+Origin = function(center) {
+    var center = center;
+    var subscribers = [];
+
+    this.subscribe = function(subscriber) {
+        subscribers.push(subscriber);
+    }
+
+    this.getCenter = function() {
+        return center;
+    }
+
+    this.setCenter = function(val) {
+        center = val;
+        _.each(subscribers, function(subscriber) {
+            subscriber.notify(val);
+        })
+    }
+}
+
+Map = function(map, parkingSpots, routes) {
+    var parkingSpots = parkingSpots; 
+    var routes = routes;
+
+    /*
+     * Resize the bounds of `map` to include each of `targets`.
+     */
+    var resizeBounds = function(targets) {
+        var bounds = _.foldl(targets, function(bounds, spot) {
+            return bounds.extend(spot.latLng);
+        }, map.getBounds());
+        map.fitBounds(bounds);
+    }
+
+    this.draw = function() {
+        var origin = map.getCenter();
+        _.each(parkingSpots, function(spot) {
+            spot.draw(map);
+        });
         google.maps.event.addListener(map, 'tilesloaded', _.once(function() {
-            resizeBounds(map, parkingSpots);
+            resizeBounds(parkingSpots);
         }));
-        _.each(travelModes, function(travelMode) {
-            var route = new Route(map, travelMode, parkingSpots);
-            route.setOrigin(origin);
+    }
+
+    this.notify = function(center) {
+        this.draw();
+        _.each(routes, function(route) {
+            route.calculateDirections(center, parkingSpots, function() {});
         });
-    });
+    }
 }
 
+ParkingSpot = function(spot) {
+    this.latLng = new google.maps.LatLng(
+        spot.latitude,
+        spot.longitude
+    );
+    var marker;
+
+    this.draw = function(map) {
+        if (typeof marker === "undefined") {
+            marker = new Marker({
+                map: map,
+                // todo: this is redundant
+                position: new google.maps.LatLng(
+                    spot.latitude,
+                    spot.longitude
+                ),
+                title: spot['location'],
+            });
+        }
+        return marker;
+    }
+}
 
 /*
- * Draw each parking spot on the map.
+ * Display directions from `start` to `end` using `travelMode`.
  *
- * Close parking spots will be emphasized.
+ * Note: Since it is expected that several routes will be shown at once, icons
+ * indicating the mode of travel are shown along with the route.
  */
-function drawParkingSpots(map, parkingSpots) {
-    _.each(parkingSpots, function(spot) {
-        var marker = new Marker({
-            map: map,
-            position: spot.latLng,
-            title: spot['location'],
-        });
-    });
-}
+function Route(travelMode, directionsRenderer) {
+    var directionsRenderer = directionsRenderer;
+    var markers = [];
 
-/*
- * Resize the bounds of `map` to include each of `targets`.
- */
-function resizeBounds(map, targets) {
-    var bounds = _.foldl(targets, function(bounds, spot) {
-        return bounds.extend(spot.latLng);
-    }, map.getBounds());
-    map.fitBounds(bounds);
+    this.draw = function(map) {
+        var directions = directionsRenderer.getDirections();
+        _.each(markers, function(marker) {
+            marker.setMap(null);
+        });
+        markers = [];
+        var leg = directions.routes[0].legs[0];
+        _.each(leg.steps, function(step) {
+            var marker = new Marker({
+                position: getMidpoint(step.start_location, step.end_location),
+                icon: iconByTravelMode[travelMode],
+                zIndex: 1,
+            });
+            marker.setMap(map);
+            markers.push(marker);
+        });
+    }
+
+    this.notify = function(origin) {
+    }
+
+    /*
+     * Calculate a path to the closest parking spot.
+     */
+    this.calculateDirections = function(origin, parkingSpots, success) {
+        getClosestSpot(origin, parkingSpots, travelMode, function(closestSpot) {
+            var request = {
+                origin: origin,
+                destination: closestSpot.latLng,
+                travelMode: travelMode,
+            };
+            directionsService.route(request, function(result, status) {
+                if (status == google.maps.DirectionsStatus.OK) {
+                    directionsRenderer.setDirections(result);
+                    success(result);
+                }
+            });
+        });
+    }
 }
 
 
@@ -119,78 +239,6 @@ function getMidpoint(latLng1, latLng2) {
         (latLng1.lat() + latLng2.lat()) / 2,
         (latLng1.lng() + latLng2.lng()) / 2
     );
-}
-
-/*
- * Display directions from `start` to `end` using `travelMode`.
- *
- * Note: Since it is expected that several routes will be shown at once, icons
- * indicating the mode of travel are shown along with the route.
- */
-function Route(map, travelMode, parkingSpots) {
-    var origin;
-    var options = {
-        draggable: true,
-        polylineOptions: {
-            strokeColor: ROUTE_COLOR,
-        },
-        preserveViewport: true,
-    };
-    var directionsRenderer = new google.maps.DirectionsRenderer(options);
-    directionsRenderer.setMap(map);
-    var markers = [];
-
-    function draw(directions) {
-        _.each(markers, function(marker) {
-            marker.setMap(null);
-        });
-        markers = [];
-        var leg = directions.routes[0].legs[0];
-        _.each(leg.steps, function(step) {
-            var marker = new Marker({
-                position: getMidpoint(step.start_location, step.end_location),
-                icon: iconByTravelMode[travelMode],
-                zIndex: 1,
-            });
-            marker.setMap(map);
-            markers.push(marker);
-        });
-    }
-
-    /*
-     * Calculate a path to the closest parking spot.
-     */
-    var calculate = function() {
-        getClosestSpot(origin, parkingSpots, travelMode, function(closestSpot) {
-            var request = {
-                origin: origin,
-                destination: closestSpot.latLng,
-                travelMode: travelMode,
-            };
-            directionsService.route(request, function(result, status) {
-                if (status == google.maps.DirectionsStatus.OK) {
-                    directionsRenderer.setDirections(result);
-                }
-            });
-        });
-    }
-
-    this.setOrigin= function(val) {
-        origin = val;
-        calculate();
-    }
-
-    google.maps.event.addListener(directionsRenderer, 'directions_changed', function() {
-        var directions = directionsRenderer.getDirections();
-        var leg = directions.routes[0].legs[0];
-        if (origin.equals(leg.start_location)) {
-            draw(directions);
-        } else {
-            origin = leg.start_location;
-            calculate();
-        }
-    });
-    
 }
 
 
@@ -252,13 +300,9 @@ function getNearbyParkingSpots(latLng, success) {
         longitude: latLng.lng(),
     }, function(parkingSpots) {
         success(_.map(parkingSpots, function(spot) {
-            spot.latLng = new google.maps.LatLng(
-                spot.latitude,
-                spot.longitude
-            );
-            return spot;
+            return new ParkingSpot(spot);
         }))
     });
 }
 
-google.maps.event.addDomListener(window, 'load', initialize);
+google.maps.event.addDomListener(window, 'load', main);
